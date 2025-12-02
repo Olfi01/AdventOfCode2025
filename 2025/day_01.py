@@ -5,7 +5,7 @@ import pyperclip
 from common import Day
 
 
-class Day001(Day):
+class Day01(Day):
     def __init__(self):
         super().__init__(year=2025, day=1)
 
@@ -33,7 +33,7 @@ class Day001(Day):
 
 
 async def main():
-    day = Day001()
+    day = Day01()
     if len(sys.argv) > 0:
         inp = sys.argv[1]
     else:

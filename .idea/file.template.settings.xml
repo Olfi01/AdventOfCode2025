@@ -6,7 +6,7 @@
     </j2ee_templates>
     <default_templates>
       <template name="Advent of Code Day.py" file-name="${aoc_year}/day_#if($aoc_day&lt;10)0#end${aoc_day}" reformat="true" live-template-enabled="false" />
-      <template name="Advent of Code Today.py" file-name="${YEAR}/day_#if($DAY&lt;10)0${DAY}#else${DAY}#end" reformat="true" live-template-enabled="false" />
+      <template name="Advent of Code Today.py" file-name="${YEAR}/day_${DAY}" reformat="true" live-template-enabled="false" />
     </default_templates>
   </component>
 </project>

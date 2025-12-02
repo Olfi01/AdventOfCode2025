@@ -1,4 +1,4 @@
-#if ($aoc_day < 10)
+#if ($aoc_day.length() < 2)
 #set ($aoc_fday = '0' + $aoc_day)
 #else
 #set ($aoc_fday = $aoc_day)
@@ -11,7 +11,7 @@ from common import Day
 
 class Day${aoc_fday}(Day):
     def __init__(self):
-        super().__init__(year=${aoc_year}, day=${aoc_day})
+        super().__init__(year=${aoc_year}, day=${aoc_day.replaceFirst("^0+(?!$)", "")})
         
     async def part_1(self):
         return 0
