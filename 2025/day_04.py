@@ -10,10 +10,7 @@ class Day04(Day):
         super().__init__(year=2025, day=4)
 
     async def part_1(self):
-        grid = []
-        async for line in self.get_inputs():
-            row = list(line)
-            grid.append(row)
+        grid = [list(line) async for line in self.get_inputs()]
         n = 0
         for y in range(len(grid)):
             for x in range(len(grid[y])):
@@ -30,10 +27,7 @@ class Day04(Day):
         return n
 
     async def part_2(self):
-        grid = []
-        async for line in self.get_inputs():
-            row = list(line)
-            grid.append(row)
+        grid = [list(line) async for line in self.get_inputs()]
         n = 0
         removed = True
         while removed:
