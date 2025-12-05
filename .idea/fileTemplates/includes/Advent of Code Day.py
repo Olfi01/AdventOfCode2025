@@ -12,6 +12,9 @@ from common import Day
 class Day${aoc_fday}(Day):
     def __init__(self):
         super().__init__(year=${aoc_year}, day=${aoc_day.replaceFirst("^0+(?!$)", "")})
+
+    def get_testinput(self) -> str | None:
+        return super().get_testinput()
         
     async def part_1(self):
         return 0
@@ -21,11 +24,13 @@ class Day${aoc_fday}(Day):
        
 async def main():
     day = Day${aoc_fday}()
-    if len(sys.argv) > 0:
+    if len(sys.argv) > 1:
         inp = sys.argv[1]
     else:
         print('Part 1 or 2?')
         inp = input()
+    if len(sys.argv) > 2:
+        day.testinput = not not sys.argv[2]
     res = await day.part_2() if inp == '2' else await day.part_1()
     print(res)
     pyperclip.copy(res)

@@ -9,6 +9,9 @@ class Day05(Day):
     def __init__(self):
         super().__init__(year=2025, day=5)
 
+    def get_testinput(self) -> str | None:
+        return super().get_testinput()
+
     async def part_1(self):
         blocks = [block async for block in self.get_inputs('\n\n')]
         ranges = []
@@ -47,11 +50,13 @@ class Day05(Day):
 
 async def main():
     day = Day05()
-    if len(sys.argv) > 0:
+    if len(sys.argv) > 1:
         inp = sys.argv[1]
     else:
         print('Part 1 or 2?')
         inp = input()
+    if len(sys.argv) > 2:
+        day.testinput = not not sys.argv[2]
     res = await day.part_2() if inp == '2' else await day.part_1()
     print(res)
     pyperclip.copy(res)
