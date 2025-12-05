@@ -10,7 +10,17 @@ class Day05(Day):
         super().__init__(year=2025, day=5)
 
     def get_testinput(self) -> str | None:
-        return super().get_testinput()
+        return """3-5
+10-14
+16-20
+12-18
+
+1
+5
+8
+11
+17
+32"""
 
     async def part_1(self):
         blocks = [block async for block in self.get_inputs('\n\n')]
