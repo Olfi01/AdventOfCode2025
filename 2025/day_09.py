@@ -3,7 +3,6 @@ import sys
 import turtle
 from functools import cache
 
-import png
 import pyperclip
 from first import first
 
@@ -22,7 +21,7 @@ class HashableDict:
 def area(rect: tuple[tuple[int, int], tuple[int, int]]) -> int:
     a = rect[0]
     b = rect[1]
-    return abs(a[0] - b[0] + 1) * abs(a[1] - b[1] + 1)
+    return (abs(a[0] - b[0]) + 1) * (abs(a[1] - b[1]) + 1)
 
 
 @cache
@@ -155,7 +154,7 @@ def crosses_vertical_edge(y: int, left: int, right: int, vertical_edges: Hashabl
 def crosses_horizontal_edge(x: int, top: int, bottom: int, horizontal_edges: HashableDict) -> bool:
     for y in range(top + 1, bottom):
         edges = horizontal_edges.dictionary.get(y)
-        if edges and any(within_edge(edge, x, y) for edge in edges):
+        if edges and any(within_edge(edge, x, y) and edge[0] != (x, y) and edge[1] != (x, y) for edge in edges):
             return True
     return False
 
@@ -227,38 +226,45 @@ def mismatching_corners(rect: tuple[tuple[int, int], tuple[int, int]], horizonta
     return False
 
 
-def draw(corners: list[tuple[int, ...]], rect: tuple[tuple[int, int], tuple[int, int]]) -> None:
-    turtle.clear()
-    turtle.penup()
-    turtle.home()
-    turtle.pendown()
-    turtle.color('black')
-    factor = 0.005
-    turtle.hideturtle()
+factor = 0.005
+
+
+def draw(corners: list[tuple[int, ...]]) -> None:
+    turtle1 = turtle.Turtle()
+    turtle1.clear()
+    turtle1.penup()
+    turtle1.home()
+    turtle1.pendown()
+    turtle1.color('black')
+    turtle1.hideturtle()
     turtle.delay(0)
     for i in range(-1, len(corners) - 1):
         start = corners[i]
         end = corners[i + 1]
         if end[0] > start[0]:
-            turtle.forward((end[0] - start[0]) * factor)
+            turtle1.forward((end[0] - start[0]) * factor)
         elif end[0] < start[0]:
-            turtle.left(180)
-            turtle.forward((start[0] - end[0]) * factor)
-            turtle.right(180)
+            turtle1.left(180)
+            turtle1.forward((start[0] - end[0]) * factor)
+            turtle1.right(180)
         elif end[1] > start[1]:
-            turtle.right(90)
-            turtle.forward((end[1] - start[1]) * factor)
-            turtle.left(90)
+            turtle1.right(90)
+            turtle1.forward((end[1] - start[1]) * factor)
+            turtle1.left(90)
         elif end[1] < start[1]:
-            turtle.left(90)
-            turtle.forward((start[1] - end[1]) * factor)
-            turtle.right(90)
-    root = corners[-1]
+            turtle1.left(90)
+            turtle1.forward((start[1] - end[1]) * factor)
+            turtle1.right(90)
+
+
+def draw_rect(rect: tuple[tuple[int, int], tuple[int, int]], root: tuple[int, int]) -> None:
     left = min(rect[0][0], rect[1][0])
     top = min(rect[0][1], rect[1][1])
     right = max(rect[0][0], rect[1][0])
     bottom = max(rect[0][1], rect[1][1])
     pos = (left - root[0], top - root[1])
+    turtle.clear()
+    turtle.hideturtle()
     turtle.penup()
     turtle.goto(pos[0] * factor, pos[1] * factor * -1)
     turtle.pendown()
@@ -273,19 +279,175 @@ def draw(corners: list[tuple[int, ...]], rect: tuple[tuple[int, int], tuple[int,
     turtle.right(90)
 
 
+def get_row_sections(y, vertical_edges, horizontal_edges, min_x):
+    iterator = iter(sorted(vertical_edges.keys()))
+    horizontals = horizontal_edges.get(y, [])
+    sections = []
+    start_x = min_x - 1
+    inside = False
+    for x in iterator:
+        edges = vertical_edges[x]
+        vertical_edge = first(edge for edge in edges if within_edge(edge, x, y))
+        if vertical_edge:
+            horizontal_edge = first(edge for edge in horizontals if min(edge[0][0], edge[1][0]) == x)
+            if horizontal_edge:
+                sections.append(((start_x, x - 1), inside))
+
+                start_corner_type = get_corner_type(horizontal_edge, vertical_edge)
+                jump_to = max(horizontal_edge[0][0], horizontal_edge[1][0])
+                sections.append(((x, jump_to), True))
+
+                while True:
+                    if next(iterator) == jump_to:
+                        break
+                second_vertical_edge = first(
+                    edge for edge in vertical_edges[jump_to] if within_edge(edge, jump_to, y))
+                end_corner_type = get_corner_type(horizontal_edge, second_vertical_edge)
+
+                if start_corner_type not in {'L', 'F'} or end_corner_type not in {'J', '7'}: raise RuntimeError
+                if start_corner_type == 'L' and end_corner_type == '7':
+                    inside = not inside
+                elif start_corner_type == 'F' and end_corner_type == 'J':
+                    inside = not inside
+                start_x = jump_to + 1
+            else:
+                sections.append(((start_x, x if inside else x - 1), inside))
+                inside = not inside
+                start_x = x if inside else x + 1
+                continue
+    return sections
+
+
+def evaluate_horizontal_sections(min_x: int, min_y: int, max_x: int, max_y: int,
+                                 vertical_edges: dict[int, frozenset[tuple[tuple[int, int], tuple[int, int]]]],
+                                 horizontal_edges) -> list[tuple[tuple[int, int], list[tuple[tuple[int, int], bool]]]]:
+    output: list[tuple[tuple[int, int], list[tuple[tuple[int, int], bool]]]] = []
+    start_y = min_y - 1
+    for h in sorted(horizontal_edges.keys()):
+        before = get_row_sections(h - 1, vertical_edges, horizontal_edges, min_x)
+        output.append(((start_y, h - 1), before))
+        current = get_row_sections(h, vertical_edges, horizontal_edges, min_x)
+        output.append(((h, h), current))
+        start_y = h + 1
+    return output
+
+
+def matches_by_sections(rect, horizontal_sections: list[tuple[tuple[int, int], list[tuple[tuple[int, int], bool]]]],
+                        vertical_sections: list[tuple[tuple[int, int], list[tuple[tuple[int, int], bool]]]]) -> bool:
+    left, right = sorted([rect[0][0], rect[1][0]])
+    top, bottom = sorted([rect[0][1], rect[1][1]])
+    top_sections = first(s for s in horizontal_sections if s[0][0] <= top <= s[0][1])
+    bottom_sections = first(s for s in horizontal_sections if s[0][0] <= bottom <= s[0][1])
+    left_sections = first(s for s in vertical_sections if s[0][0] <= left <= s[0][1])
+    right_sections = first(s for s in vertical_sections if s[0][0] <= right <= s[0][1])
+
+    if any(not s[1] for s in top_sections[1] if
+           s[0][0] <= left <= right <= s[0][1]
+           or left <= s[0][0] <= right
+           or left <= s[0][1] <= right): return False
+    if not any(s[1] for s in top_sections[1] if
+               s[0][0] <= left <= s[0][1]): return False
+    if not any(s[1] for s in top_sections[1] if
+               s[0][0] <= right <= s[0][1]): return False
+
+    if any(not s[1] for s in bottom_sections[1] if
+           s[0][0] <= left <= right <= s[0][1]
+           or left <= s[0][0] <= right
+           or left <= s[0][1] <= right): return False
+    if not any(s[1] for s in bottom_sections[1] if
+               s[0][0] <= left <= s[0][1]): return False
+    if not any(s[1] for s in bottom_sections[1] if
+               s[0][0] <= right <= s[0][1]): return False
+
+    if any(not s[1] for s in left_sections[1] if
+           s[0][0] <= top <= bottom <= s[0][1]
+           or top <= s[0][0] <= bottom
+           or top <= s[0][1] <= bottom): return False
+    if not any(s[1] for s in left_sections[1] if
+               s[0][0] <= top <= s[0][1]): return False
+    if not any(s[1] for s in left_sections[1] if
+               s[0][0] <= bottom <= s[0][1]): return False
+
+    if any(not s[1] for s in right_sections[1] if
+           s[0][0] <= top <= bottom <= s[0][1]
+           or top <= s[0][0] <= bottom
+           or top <= s[0][1] <= bottom): return False
+    if not any(s[1] for s in right_sections[1] if
+               s[0][0] <= top <= s[0][1]): return False
+    if not any(s[1] for s in right_sections[1] if
+               s[0][0] <= bottom <= s[0][1]): return False
+
+    return True
+
+
+def get_col_sections(x, horizontal_edges, vertical_edges, min_y):
+    iterator = iter(sorted(horizontal_edges.keys()))
+    verticals = vertical_edges.get(x, [])
+    sections = []
+    start_y = min_y - 1
+    inside = False
+    for y in iterator:
+        edges = horizontal_edges[y]
+        horizontal_edge = first(edge for edge in edges if within_edge(edge, x, y))
+        if horizontal_edge:
+            vertical_edge = first(edge for edge in verticals if min(edge[0][1], edge[1][1]) == y)
+            if vertical_edge:
+                sections.append(((start_y, y - 1), inside))
+
+                start_corner_type = get_corner_type(horizontal_edge, vertical_edge)
+                jump_to = max(vertical_edge[0][1], vertical_edge[1][1])
+                sections.append(((y, jump_to), True))
+
+                while True:
+                    if next(iterator) == jump_to:
+                        break
+                second_horizontal_edge = first(
+                    edge for edge in horizontal_edges[jump_to] if within_edge(edge, x, jump_to))
+                end_corner_type = get_corner_type(second_horizontal_edge, vertical_edge)
+
+                if start_corner_type not in {'F', '7'} or end_corner_type not in {'L', 'J'}: raise RuntimeError
+                if start_corner_type == '7' and end_corner_type == 'L':
+                    inside = not inside
+                elif start_corner_type == 'F' and end_corner_type == 'J':
+                    inside = not inside
+                start_y = jump_to + 1
+            else:
+                sections.append(((start_y, y if inside else y - 1), inside))
+                inside = not inside
+                start_y = y if inside else y + 1
+                continue
+    return sections
+
+
+def evaluate_vertical_sections(min_x: int, min_y: int, max_x: int, max_y: int,
+                               horizontal_edges: dict[int, frozenset[tuple[tuple[int, int], tuple[int, int]]]],
+                               vertical_edges) -> list[tuple[tuple[int, int], list[tuple[tuple[int, int], bool]]]]:
+    output: list[tuple[tuple[int, int], list[tuple[tuple[int, int], bool]]]] = []
+    start_x = min_x - 1
+    for w in sorted(vertical_edges.keys()):
+        before = get_col_sections(w - 1, horizontal_edges, vertical_edges, min_y)
+        output.append(((start_x, w - 1), before))
+        current = get_col_sections(w, horizontal_edges, vertical_edges, min_y)
+        output.append(((w, w), current))
+        start_x = w + 1
+    return output
+
+
 class Day09(Day):
     def __init__(self):
         super().__init__(year=2025, day=9)
 
     def get_testinput(self) -> str | None:
-        return """7,1
-11,1
-11,7
-9,7
-9,5
-2,5
-2,3
-7,3"""
+        #         return """7,1
+        # 11,1
+        # 11,7
+        # 9,7
+        # 9,5
+        # 2,5
+        # 2,3
+        # 7,3"""
+        with open('input-nick-day-09.txt', 'r') as file:
+            return file.read()
 
     async def part_1(self):
         corners = [tuple(map(int, line.split(','))) async for line in self.get_inputs()]
@@ -295,7 +457,9 @@ class Day09(Day):
 
     async def part_2(self):
         corners = [tuple(map(int, line.split(','))) async for line in self.get_inputs()]
+        # draw(corners)
         min_x, min_y = min(corner[0] for corner in corners), min(corner[1] for corner in corners)
+        max_x, max_y = max(corner[0] for corner in corners), max(corner[1] for corner in corners)
         edges = frozenset({(corners[i], corners[i + 1]) for i in range(-1, len(corners) - 1)})
         horizontal_edges = {}
         for edge in edges:
@@ -305,30 +469,36 @@ class Day09(Day):
         for edge in edges:
             if edge[0][0] == edge[1][0]:
                 vertical_edges[edge[0][0]] = vertical_edges.get(edge[0][0], frozenset()).union(frozenset({edge}))
+        horizontal_sections = evaluate_horizontal_sections(min_x, min_y, max_x, max_y, vertical_edges, horizontal_edges)
+        vertical_sections = evaluate_vertical_sections(min_x, min_y, max_x, max_y, horizontal_edges, vertical_edges)
         rects = sorted([(corners[i], corners[j]) for i in range(len(corners)) for j in range(i + 1, len(corners))],
                        key=area, reverse=True)
         print(f'{len(rects)} rectangles to search')
-        i = 35672  # first fallback: 35673
+        i = -1  # first fallback: 31423
         while True:
             i += 1
             if i % 100 == 0:
                 print(i)
             rect = rects[i]
+            if matches_by_sections(rect, horizontal_sections, vertical_sections):
+                return area(rect)
+            # if 94543 in {rect[0][0], rect[1][0]}:
+            #     draw_rect(rect, corners[-1])
             # if (94543, 48498) not in rect:
             #     continue
-            if (94543, 50265) not in rect:
-                continue
+            # if (94543, 50265) not in rect:
+            #     continue
             # if i < 34000: continue
-            if crosses_any_edge(rect, HashableDict(horizontal_edges), HashableDict(vertical_edges)):
-                continue
+            # if crosses_any_edge(rect, HashableDict(horizontal_edges), HashableDict(vertical_edges)):
+            #     continue
             # if mismatching_corners(rect, HashableDict(horizontal_edges), HashableDict(vertical_edges)):
             #     continue
-            print(f'Fallback reached: {i}')
-            print(area(rect))
-            draw(corners, rect)
-            input()
-            if all_green_or_red(rect, HashableDict(horizontal_edges), HashableDict(vertical_edges), min_x, min_y):
-                return area(rect)
+            # print(f'Fallback reached: {i}')
+            # print(area(rect))
+            # draw_rect(rect, corners[-1])
+            # input()
+            # if all_green_or_red(rect, HashableDict(horizontal_edges), HashableDict(vertical_edges), min_x, min_y):
+            #     return area(rect)
 
 
 async def main():
